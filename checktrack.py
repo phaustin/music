@@ -26,7 +26,7 @@ picfile=open('albums.pic','r')
 albums=pickle.load(picfile)
 picfile.close()
 
-albumtitle=u'stop_making_sense'
+albumtitle=u'luck_of_the_draw'
 
 for count,item in enumerate(albums):
     firsthit=False
