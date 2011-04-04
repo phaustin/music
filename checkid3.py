@@ -7,7 +7,7 @@ from sqlalchemy.orm import mapper,create_session
 import string,os,shutil,pickle
 import glob
 
-thefiles=glob.glob('/home/phil/mirrors/TTRH-1-Weather/*')
+thefiles=glob.glob('/home/phil/mirrors/itunes/the_wailin_jennys/40_days/*')
 
 for a_file in thefiles:
     try:
