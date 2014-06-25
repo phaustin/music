@@ -1,13 +1,22 @@
-#!/usr/bin/env /Users/phil/miniconda3/bin/python
+#!/usr/bin/env /Users/phil/miniconda/bin/python
 # -*- coding: utf-8 -*-
 """
+    b21dc704-d94d-4cb1-b9a0-dd80ed00e607
     find_tracks.py /Volumes/green1/mirrors/cdproj/various_artists/the_civil_war wR2Ep0GXwXTg4Ue9XCxx6k0Yv6E-
+    find_tracks.py /Volumes/green1/mirrors/cdproj/various/going_driftless_an_artists_tribute_to_greg_brown RpaUAm6QgqsVF9yEeQa4p0hxeUg-
+    find_tracks.py /Volumes/green1/mirrors/cdproj/various/poet_a_tribute_to_townes_van_zandt b21dc704-d94d-4cb1-b9a0-dd80ed00e607
+    python ~/repos/music/find_tracks.py /Volumes/green1/mirrors/warren_zevon/the_wind ssJYvpaz5qLHq26TEV84.68sXy4-
 """
 from __future__ import  print_function
 import glob,sys,os
 import argparse, textwrap
 import musicbrainzngs
 
+musicbrainzngs.set_useragent(
+    "python-musicbrainzngs-example",
+    "0.1",
+    "https://github.com/alastair/python-musicbrainzngs/",
+)
 
 def make_key(filename=None,track=None):
     if filename:
@@ -20,12 +29,38 @@ def make_key(filename=None,track=None):
     out=out.replace(')','')
     out=out.replace("'",'')
     out=out.replace("&",'')
+    out=out.replace(".",'')
     return out[:4] + out[-10:]
 
+
+def make_key_zevon(filename=None,track=None):
+    if filename:
+        filename,ext=os.path.splitext(filename)
+    else:
+        filename=track['recording']['title']
+    out=filename.replace('_','').lower()
+    out=out.replace(' ','')
+    out=out.replace('(','')
+    out=out.replace(')','')
+    out=out.replace("'",'')
+    out=out.replace("&",'')
+    out=out.replace(".",'')
+    return out[-10:]
+
+make_key=make_key_zevon
+
+
 def strip_result(discid):
-    result = musicbrainzngs.get_releases_by_discid(discid,includes=["labels","recordings","artist-credits"])
-    track_list=result['disc']['release-list'][0]['medium-list'][0]['track-list']
-    disc_title=result['disc']['release-list'][0]['title']
+    try:
+        result = musicbrainzngs.get_releases_by_discid(discid,includes=["labels","recordings","artist-credits"])
+        root='disc'
+        track_list=result[root]['release-list'][0]['medium-list'][0]['track-list']
+        disc_title=result[root]['release-list'][0]['title']
+    except musicbrainzngs.ResponseError:
+        result = musicbrainzngs.get_release_by_id(discid,includes=["labels","recordings","artist-credits"])
+        root='release'
+        track_list=result[root]['medium-list'][0]['track-list']
+        disc_title=result['release']['title']
     out=[]
     for track in track_list:
         title=track['recording']['title']
@@ -75,7 +110,10 @@ if __name__=='__main__':
 
     disc_title,tracks=strip_result(args.discid)
     for the_track in tracks:
-        the_track['filename']=key_dict[the_track['key']]
+        try:
+            the_track['filename']=key_dict[the_track['key']]
+        except KeyError:
+            print('missing {}'.format(repr(the_track)))
     out_dict=dict(title=disc_title,path=args.album,tracks=tracks,discid=args.discid)
     print(out_dict)
 

@@ -50,6 +50,7 @@ def proc_file(the_file, force, exten):
     fields = {}
     subfields = {}
     test=easy_fun[exten](the_file)
+    print("here is test: ",test,exten)
     tags=['title','tracknumber','album','artist', 'genre','discnumber','albumsort', 'albumartist',  'artistsort', 'titlesort','date']
     out_dict=OrderedDict()
     for item in tags:
@@ -72,11 +73,16 @@ if __name__=='__main__':
     print("epassing args.wildcard=",args.wildcard)
     print("and is it a file? ",os.path.isfile(args.wildcard))
     if os.path.isfile(args.wildcard):
-        proc_file(args.wildcarddir, args.force)
+        proc_file(args.wildcard, args.force,'mp3')
     else:
         proc_dir(args.wildcard, args.force)
-    
 
+    the_test= EasyMP3('/Volumes/green1/mirrors/2006__we_shall_overcome_the_seeger_sessions/my_oklahoma_home.mp3')
+    print(the_test)
+    title='/Users/phil/Music/iTunes/iTunes Media/Music/Compilations/Poet_ A Tribute To Townes Van Zandt/01 To Live Is To Fly.mp3'
+    test2=EasyMP3(title)
+    print(test2)
+    
     
     
 
