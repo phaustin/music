@@ -1,4 +1,4 @@
-#!/usr/bin/env /Users/phil/miniconda3/bin/python
+#!/usr/bin/env /Users/phil/miniconda/bin/python
 # -*- coding: utf-8 -*-
 """
     id3dump.py '/Users/phil/Music/iTunes/iTunes Media/Music/Iron & Wine'
@@ -82,6 +82,10 @@ if __name__=='__main__':
     title='/Users/phil/Music/iTunes/iTunes Media/Music/Compilations/Poet_ A Tribute To Townes Van Zandt/01 To Live Is To Fly.mp3'
     test2=EasyMP3(title)
     print(test2)
+    title='/Users/phil/Music/iTunes/iTunes Media/Music/Benjamin Gibbard/Former Lives/03 Teardrop Windows.m4a'
+    test3=EasyMP4(title)
+    print test3
+    
     
     
     
