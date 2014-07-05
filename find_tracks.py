@@ -21,19 +21,56 @@ musicbrainzngs.set_useragent(
     "https://github.com/alastair/python-musicbrainzngs/",
 )
 
-def make_key_artists(filename=None,track=None):
-    if filename:
-        filename,ext=os.path.splitext(filename)
-    else:
-        filename=track['artist-credit-phrase'] + track['recording']['title']
-    out=filename.replace('_','').lower()
+def sanitize(the_string):
+    out=the_string.replace('_','').lower()
     out=out.replace(' ','')
     out=out.replace('(','')
     out=out.replace(')','')
     out=out.replace("'",'')
     out=out.replace("&",'')
     out=out.replace(".",'')
+    out=out.replace("/",'')
+    out=out.replace(",",'')
+    out=out.replace("?",'')
+    out=out.replace("-",'')
+    out=out.replace(":",'')
+    out=out.replace('"','')
+    out=out.replace(u'\u2019','')
+    return out
+
+def make_key_split(filename=None,track=None):
+    if filename:
+        filename,ext=os.path.splitext(filename)
+        parts=filename.split('__')
+        if len(parts) == 2:
+            title,artist=parts
+        else:
+            title=parts[0]
+    else:
+        title=track['recording']['title']
+    title=sanitize(title)
+    return title[-5:]
+
+def make_key_artists(filename=None,track=None):
+    if filename:
+        filename,ext=os.path.splitext(filename)
+    else:
+        filename=track['artist-credit-phrase'] + track['recording']['title']
+    out=sanitize(filename)
     return out[:4] + out[-10:]
+
+
+def make_key_tracknums(filename=None,track=None):
+    """
+       match track numbers
+    """
+    if filename:
+        head,ext=os.path.splitext(filename)
+        tracknum=head.split('-')
+        tracknum=int(tracknum[1][:2])
+    else:
+        tracknum=int(track['number'])
+    return tracknum
 
 
 def make_key_titles(filename=None,track=None):
@@ -41,18 +78,11 @@ def make_key_titles(filename=None,track=None):
         filename,ext=os.path.splitext(filename)
     else:
         filename=track['recording']['title']
-    out=filename.replace('_','').lower()
-    out=out.replace(' ','')
-    out=out.replace('(','')
-    out=out.replace(')','')
-    out=out.replace("'",'')
-    out=out.replace("&",'')
-    out=out.replace(".",'')
-    return out[-10:]
+    out=sanitize(filename)
+    return out[-4:]
 
 
-
-def strip_result(id,make_key):
+def strip_result(id,make_key,disc_index):
     try:
         result = musicbrainzngs.get_releases_by_discid(id,includes=["labels","recordings","artist-credits"])
         root=result['disc']['release-list'][0]
@@ -62,8 +92,9 @@ def strip_result(id,make_key):
         root=result['release']
         discid=None
         
-    track_list=root['medium-list'][0]['track-list']
-    track_count=root['medium-list'][0]['track-count']
+    disc_count=root['medium-count']
+    track_list=root['medium-list'][disc_index]['track-list']
+    track_count=root['medium-list'][disc_index]['track-count']
     disc_title=root['title']
     release=root['id']
 
@@ -75,8 +106,8 @@ def strip_result(id,make_key):
                 title=title,
                 key=make_key(track=track))
         out.append(item)
-    out_dict=dict(title=disc_title,track_count=track_count,path=args.album,track_list=out,discid=discid,
-                  release=release)
+    out_dict=dict(title=disc_title,track_count=track_count,path=the_album,track_list=out,discid=discid,
+                  disc_count=disc_count,release=release)
     return out_dict
 
 def make_track_dict(album_dict):
@@ -94,41 +125,50 @@ if __name__=='__main__':
     linebreaks=argparse.RawTextHelpFormatter
     parser.add_argument('album', type=str,help='path with wildcards')
     parser.add_argument('id', type=str,help='musicbrainz discid or release id')
-    parser.add_argument('--with_artists',action='store_true',default=False)
-    
+    parser.add_argument('--key_version',type=str,default='titles',help='titles,artists,tracknums or split')
+    parser.add_argument('--disc_number',type=int,default=1,help='1, 2, etc.')
+    parser.add_argument('--is_compilation',dest='compilation',action='store_true',help='true if album is various artists')
     args=parser.parse_args()
     print("arrived: args are {}".format(args))
+
+    the_album=glob.glob(args.album)
+    if len(the_album) != 1:
+       raise Exception('glob of {} yields bad directory {}'.format(args.album,repr(the_album)))
+    the_album=the_album[0]
+    if not os.path.isdir(the_album):
+        raise Exception('{} is not a directory'.format(the_album))
     #
     #  make a list of (key,filename) tuples for each mp3 file
     #  format is first 4 charaters of artist + last 10 characters of title
     #
-    if args.with_artists:
+    compilation=args.compilation
+    print("compilation is set to: ",compilation)
+    if args.key_version=='artists':
         make_key=make_key_artists
-    else:
+    elif args.key_version=='titles':
         make_key=make_key_titles
+    elif args.key_version=='tracknums':
+        make_key=make_key_tracknums
+    elif args.key_version=='split':
+        make_key=make_key_split
+    else:
+        raise ValueError('key version needs to be artists,titles, or tracknums')
     skip_tracks=[]
-    for subdir, dirs, files in os.walk(args.album):
+    disc_index=args.disc_number - 1
+    for subdir, dirs, files in os.walk(the_album):
+        print("walker found: {}".format(repr(files)))
         key_list=[]
         for the_file in files:
-            parts=the_file.split('_')
-            #handle 26-jacqueline_schwab__battle_cry_of_freedom.mp3
-            tracknum=parts[0].split('-')
-            if len(tracknum) > 1:
-                try:
-                    int(tracknum[0])
-                    print("skipping explicitly assigned {}".format(the_file))
-                    skip_tracks.append((int(tracknum[0]),the_file))
-                    continue
-                except ValueError:
-                    print("found non-integer in front of filename for {}".format(the_file))
-                    raise ValueError
+            name,ext=os.path.splitext(the_file)
+            if ext not in ['.mp3','.m4a']:
+                continue
             key_list.append((the_file,make_key(filename=the_file)))
             dup_set=set([x for x in key_list if key_list.count(x) > 1])
         if len(dup_set) > 1:
             raise Exception("found dups: {}".format(repr(dup_set)))
         key_dict={the_tup[1]:the_tup[0] for the_tup in key_list}
 
-    album_dict=strip_result(args.id,make_key)
+    album_dict=strip_result(args.id,make_key,disc_index)
     for the_track in album_dict['track_list']:
         try:
             the_track['filename']=key_dict[the_track['key']]
@@ -142,23 +182,22 @@ if __name__=='__main__':
         track_num,filename=the_track
         album_dict['track_num_dict'][track_num]['filename']=filename
 
-    album_dict['track_num_dict'][4]['title']='Battle Cry of Freedom I'
     for track_num,the_track in album_dict['track_num_dict'].items():
-        print(track_num,the_track)
+        if the_track['filename']=='Need Name':
+            print('skipping track: {}'.format(repr(the_track)))
+            continue
+        else:
+            print(track_num,the_track)
         filename="{}/{}".format(album_dict['path'],the_track['filename'])
         mp3_file=EasyMP3(filename)
         print(filename)
         mp3_file['album']=album_dict['title']
         mp3_file['title']=the_track['title']
-        mp3_file['compilation']='1'
+        if compilation:
+            mp3_file['compilation']='1'
         mp3_file['artist']=the_track['artists']
         mp3_file['tracknumber']="{}/{}".format(track_num,album_dict['track_count'])
-        mp3_file['discnumber']='1/1'
+        mp3_file['discnumber']='{}/{}'.format(args.disc_number,album_dict['disc_count'])
         mp3_file.save()
         
-('here is test: ', {'album': [u'Poet: A Tribute To Townes Van Zandt'], 'artist': [u'John T. Van Zandt'], 'compilation': [u'1'], 'title': [u'My Proud Mountains'], 'encodedby': [u'iTunes 11.2.2'], 'composer': [u'Not Documented'], 'date': [u'2001'], 'tracknumber': [u'15/15'], 'discnumber': [u'1/1'], 'genre': [u'Country & Folk']}, 'mp3')
-        
-    
-    
-
-
+#('here is test: ', {'album': [u'Poet: A Tribute To Townes Van Zandt'], 'artist': [u'John T. Van Zandt'], 'compilation': [u'1'], 'title': [u'My Proud Mountains'], 'encodedby': [u'iTunes 11.2.2'], 'composer': [u'Not Documented'], 'date': [u'2001'], 'tracknumber': [u'15/15'], 'discnumber': [u'1/1'], 'genre': [u'Country & Folk']}, 'mp3')
